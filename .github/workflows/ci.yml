@@ -11,35 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: yarn
 
-      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 4️⃣ Lint (optional-safe)
+      # ⚠️ Non-blocking lint
       - name: Run lint
         run: yarn lint
         continue-on-error: true
 
-      # 5️⃣ Build project (Vite)
       - name: Build project
         run: yarn build
 
-      # 6️⃣ Docker build
       - name: Build Docker image
         run: docker build -t devsecops-project:latest .
 
-      # AGENT
+      # AGENT 
       - name: Call CI Bot Agent
         if: failure()
         env:
