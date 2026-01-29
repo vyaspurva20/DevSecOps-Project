@@ -3,51 +3,46 @@ name: CI with Auto Fix Agent
 on:
   push:
     branches: [main]
-  pull_request:
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    continue-on-error: true   # ⭐ CRITICAL
 
     outputs:
-      ci_failed: ${{ steps.set-failure.outputs.failed }}
+      failed: ${{ steps.result.outputs.failed }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: yarn
 
-      - name: Install dependencies
+      - name: Install deps
         run: yarn install --frozen-lockfile
 
-      # ❗ This WILL fail but job will continue
       - name: Run lint (expected to fail)
         id: lint
         run: yarn lint
         continue-on-error: true
 
-      - name: Build project
+      - name: Build
         id: build
         run: yarn build
         continue-on-error: true
 
-      - name: Build Docker image
+      - name: Docker build
         id: docker
-        run: docker build -t devsecops-project:latest .
+        run: docker build -t test .
         continue-on-error: true
 
-      # ✅ Single source of truth
-      - name: Set CI failure output
-        id: set-failure
+      - name: Compute CI result
+        id: result
         run: |
-          if [ "${{ steps.lint.outcome }}" = "failure" ] || \
-             [ "${{ steps.build.outcome }}" = "failure" ] || \
-             [ "${{ steps.docker.outcome }}" = "failure" ]; then
+          if [[ "${{ steps.lint.outcome }}" == "failure" || \
+                "${{ steps.build.outcome }}" == "failure" || \
+                "${{ steps.docker.outcome }}" == "failure" ]]; then
             echo "failed=true" >> $GITHUB_OUTPUT
           else
             echo "failed=false" >> $GITHUB_OUTPUT
@@ -55,12 +50,11 @@ jobs:
 
   fix-agent:
     needs: ci
-    if: needs.ci.outputs.ci_failed == 'true'
+    if: needs.ci.outputs.failed == 'true'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Call CI Bot Agent
         if: failure()
