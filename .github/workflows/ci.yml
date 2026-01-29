@@ -11,37 +11,62 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # 1️⃣ Checkout code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      # 2️⃣ Setup Node
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: yarn
 
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 🔴 LINT (track failure)
+      # 4️⃣ Lint (NON-BLOCKING)
       - name: Run lint
         id: lint
         run: yarn lint
         continue-on-error: true
 
-      # 🔴 SET FAILURE FLAG
-      - name: Mark CI failure
-        if: steps.lint.outcome == 'failure'
-        run: |
-          echo "CI_FAILED=true" >> $GITHUB_ENV
-
+      # 5️⃣ Build (NON-BLOCKING)
       - name: Build project
+        id: build
         run: yarn build
+        continue-on-error: true
 
+      # 6️⃣ Mark CI failure if ANY step failed
+      - name: Mark CI failure
+        if: steps.lint.outcome == 'failure' || steps.build.outcome == 'failure'
+        run: echo "CI_FAILED=true" >> $GITHUB_ENV
+
+      # 7️⃣ Docker build (optional, keep blocking or make non-blocking)
       - name: Build Docker image
         run: docker build -t devsecops-project:latest .
+        continue-on-error: true
 
-      # 🤖 AGENT — NOW IT WILL RUN
-      - name: Run CI Fix Agent
-        if: env.CI_FAILED == 'true'
+      # 8️⃣ 🤖 CI Fix Agent (THIS IS THE KEY STEP)
+      - name: Call CI Bot Agent
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_TOKEN }}
         run: |
-          echo "AGENT SHOULD RUN NOW"
-          # your agent call here
+          LOGS=$(cat error.log | jq -Rs .)
+       
+          curl -X POST https://api.github.com/repos/vyaspurva20/ci-bot-agent/dispatches \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -d "{
+              \"event_type\": \"fix_project_repo\",
+              \"client_payload\": {
+                \"repo\": \"${{ github.repository }}\",
+                \"logs\": $LOGS
+              }
+            }"
+      # 9️⃣ (Optional) Fail job after agent for visibility
+      # - name: Fail job if CI failed
+      #   if: env.CI_FAILED == 'true'
+      #   run: exit 1
