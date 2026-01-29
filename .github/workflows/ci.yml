@@ -49,9 +49,11 @@ jobs:
         run: docker build -t devsecops-project:latest .
         continue-on-error: true
 
+
       - name: Mark docker failure
         if: steps.docker.outcome == 'failure'
         run: echo "CI_FAILED=true" >> $GITHUB_ENV
+
 
       # 🤖 AGENT
       - name: Call CI Bot Agent
