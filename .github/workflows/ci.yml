@@ -11,44 +11,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Setup Node
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
           cache: yarn
 
-      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      # 4️⃣ Lint (NON-BLOCKING)
+      # 🔴 LINT (non-blocking)
       - name: Run lint
         id: lint
         run: yarn lint
         continue-on-error: true
 
-      # 5️⃣ Build (NON-BLOCKING)
+      - name: Mark lint failure
+        if: steps.lint.outcome == 'failure'
+        run: echo "CI_FAILED=true" >> $GITHUB_ENV
+
+      # 🔴 BUILD (non-blocking)
       - name: Build project
         id: build
         run: yarn build
         continue-on-error: true
 
-      # 6️⃣ Mark CI failure if ANY step failed
-      - name: Mark CI failure
-        if: steps.lint.outcome == 'failure' || steps.build.outcome == 'failure'
+      - name: Mark build failure
+        if: steps.build.outcome == 'failure'
         run: echo "CI_FAILED=true" >> $GITHUB_ENV
 
-      # 7️⃣ Docker build (optional, keep blocking or make non-blocking)
+      # 🔴 DOCKER (optional)
       - name: Build Docker image
+        id: docker
         run: docker build -t devsecops-project:latest .
         continue-on-error: true
 
-      # 8️⃣ 🤖 CI Fix Agent (THIS IS THE KEY STEP)
+      - name: Mark docker failure
+        if: steps.docker.outcome == 'failure'
+        run: echo "CI_FAILED=true" >> $GITHUB_ENV
+
+      # 🤖 AGENT
       - name: Call CI Bot Agent
         if: failure()
         env:
@@ -66,7 +71,3 @@ jobs:
                 \"logs\": $LOGS
               }
             }"
-      # 9️⃣ (Optional) Fail job after agent for visibility
-      # - name: Fail job if CI failed
-      #   if: env.CI_FAILED == 'true'
-      #   run: exit 1
